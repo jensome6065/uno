@@ -1,18 +1,17 @@
-import tkinter as tk
-from tkinter import messagebox
-TK_SILENCE_DEPRECATION = 1
+# python3 -m pip install PySimpleGUI
+import PySimpleGUI as sg
 
-def start():
-    messagebox.showinfo("UNO", "uno is starting!")
+layout = [[sg.Text("welcome to our UNO game!", font = ('Helvetica', 40), justification = 'center')],
+          [sg.Button("start", font = ('Helvetica', 20), size = (10, 2))]]
 
-root = tk.Tk()
-root.title("UNO")
+window = sg.Window("UNO game", layout, size = (800, 600))
 
-root.geometry("700x500")
+while True:
+    event, values = window.read()
+    if event == sg.WINDOW_CLOSED:
+        break
+    elif event == "start":
+        sg.popup("game is starting...")
+        break
 
-messagebox.showinfo("UNO", "welcome to our UNO game!")
-
-startButton = tk.Button(root, text = "start", font=("Helvetica", 18), command = start)
-startButton.pack(pady = 200)
-
-root.mainloop()
+window.close()
