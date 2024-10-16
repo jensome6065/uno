@@ -26,8 +26,21 @@ while True:
     if event == sg.WINDOW_CLOSED:
         break
     elif event == "start":
+        while True:
+            numPlayers = sg.popup_get_text("enter number of players (2-4):", title = "number of players")
+            if numPlayers and numPlayers.isdigit():
+                numPlayers = int(numPlayers)
+                if 2 <= numPlayers <= 4:
+                    break
+                else:
+                    sg.popup("please enter a number between 2 and 4.")
+            else:
+                sg.popup("invalid")
+        
         deck = buildDeck()
-        givenCards = random.sample(deck, 7)
-        sg.popup("your hand:\n" + "\n".join(givenCards), title = "your cards")
+        allGiven = {f"player {i+1}": random.sample(deck, 7) for i in range(numPlayers)}
+        
+        for player, cards in allGiven.items():
+            sg.popup(f"{player}'s hand:\n" + "\n".join(cards), title=f"{player}'s cards")
 
 window.close()
