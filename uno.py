@@ -1,5 +1,6 @@
 # python3 -m pip install PySimpleGUI
 import PySimpleGUI as sg
+import random
 
 def buildDeck():
     deck = []
@@ -25,6 +26,8 @@ while True:
     if event == sg.WINDOW_CLOSED:
         break
     elif event == "start":
-        sg.popup("game is starting...")
+        deck = buildDeck()
+        givenCards = random.sample(deck, 7)
+        sg.popup("your hand:\n" + "\n".join(givenCards), title = "your cards")
 
 window.close()
