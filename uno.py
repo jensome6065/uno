@@ -3,141 +3,188 @@ import PySimpleGUI as sg
 from player import Player
 from cards import Deck, Card
 
-
 # Function to map card color to display color
 def map_color(color_name):
     color_map = {"Red": "#FF0000", "Yellow": "#FFFF00", "Green": "#00FF00", "Blue": "#0000FF", "Wild": "#000000"}
     return color_map.get(color_name, "#FFFFFF")
 
 
-# Function to draw UNO card graphically (cards are now dictionaries)
-def draw_uno_card(graph, card, pos):
-    x, y = pos
-    color = map_color(card["color"])
-    value = card["value"]
-    card_type = 'number' if value.isdigit() else 'special'
-    
-    # Draw the card rectangle
-    graph.draw_rectangle((x, y), (x + 90, y + 135), line_color='black', fill_color=color)
-    
-    # Draw the card circle (for the value)
-    graph.draw_circle((x + 45, y + 67), 35, fill_color='white', line_color='black', line_width=2)
-    
-    # Draw the value text based on the card type (normal or special)
-    font_size = 30 if card_type == 'number' else 20
-    graph.draw_text(value, (x + 45, y + 67), font=('Helvetica', font_size), color='black', text_location=sg.TEXT_LOCATION_CENTER)
+# Function to display a player's hand graphically as buttons
+def display_hand(window, player, update_only=False):
+    """Display the player's hand as buttons."""
+    if not update_only:
+        # Clear the hand area for a full redraw
+        window["hand_area"].update([])
 
-
-# Display a player's hand graphically and make cards clickable
-def display_hand(window, player, graph):
-    graph.erase()  # Clear the graph before drawing
-    card_positions = []
-    x, y = 10, 300
-    buttons = []
-
-    # Create a column layout for the buttons
-    button_column = []
-
+    # Dynamically create card buttons
+    hand_layout = []
     for idx, card in enumerate(player.hand):
-        color = map_color(card["color"])
-        card_type = 'number' if card["value"].isdigit() else 'special'
-        draw_uno_card(graph, card, (x, y))
-        card_positions.append((x, y, card, idx))  # Track the card position and its index
-        
-        # Create a button over the card (centered) with the same size as the card
-        button = sg.Button(card["value"], key=f'card_{idx}', size=(9, 13), pad=(0, 0), font=('Helvetica', 10), 
-                           button_color=('black', color), visible=True)
-        button_column.append(button)
-        
-        x += 100  # Space cards horizontally
-    
-    # Add the button column layout to the window
-    window.extend_layout(window['graph'], [[sg.Column([button_column], key="button_column")]])
+        button = sg.Button(
+            f"{card.color}\n{card.value}",
+            size=(10, 5),
+            key=f"card_{idx}",
+            button_color=('black', map_color(card.color)),
+            pad=(5, 5),
+            font=('Helvetica', 12)
+        )
+        hand_layout.append(button)
 
-    return card_positions
+    # Add the hand buttons to the hand area
+    window["hand_area"].update(hand_layout)
 
 
-# Draw the top card on the deck (centered)
-def draw_top_card(graph, card):
-    """Draws the top card on the deck."""
-    graph.erase()  # Clear any previous card
-    color = map_color(card["color"])
-    draw_uno_card(graph, card, (10, 10))
+# Function to update the top card display
+def update_top_card_display(window, top_card):
+    """Update the top card display."""
+    window["top_card"].update(f"{top_card.color}\n{top_card.value}")
+    window["top_card"].update(button_color=('black', map_color(top_card.color)))
 
 
-# Main game logic to play UNO
+# Layout with enhancements (added fonts, spacing, and card area organization)
+def create_layout():
+    layout = [
+        [sg.Text("UNO Game", font=("Helvetica", 20, "bold"), justification="center")],
+        [sg.Text("Top Card:", font=("Helvetica", 14)), sg.Button("", size=(12, 6), key="top_card", disabled=True)],
+        [sg.Text("Player's Turn: ", size=(12, 1), font=("Helvetica", 12), key="player_turn")],
+        [
+            sg.Button("<", size=(3, 2), key="scroll_left"),  # Scroll left button
+            sg.Column([[]], size=(850, 150), key="hand_area", justification="center"),
+            sg.Button(">", size=(3, 2), key="scroll_right")  # Scroll right button
+        ],
+        # Deck area display
+        [sg.Text("Deck", font=("Helvetica", 14)), 
+         sg.Button("Draw", size=(10, 2), key="draw_card", font=('Helvetica', 12), pad=(5, 5)),
+         sg.Text("Deck Remaining Cards: ", font=("Helvetica", 12)), sg.Text("", key="deck_count", font=("Helvetica", 12))],
+        [sg.Button("End Turn", size=(12, 2)), sg.Button("Exit", size=(12, 2))]
+    ]
+    return layout
+
+
+# Get number of players function
+def get_number_of_players():
+    """Prompt user for number of players between 2 and 4."""
+    layout = [
+        [sg.Text("How many players? (2-4)", font=("Helvetica", 16))],
+        [sg.InputText("", key="num_players", size=(5, 1), justification='center')],
+        [sg.Button("OK", font=("Helvetica", 14))]
+    ]
+
+    window = sg.Window("UNO Game - Players", layout, finalize=True)
+
+    while True:
+        event, values = window.read()
+
+        if event in (sg.WIN_CLOSED, "Exit"):
+            window.close()
+            return None
+
+        if event == "OK":
+            try:
+                num_players = int(values["num_players"])
+                if 2 <= num_players <= 4:
+                    window.close()
+                    return num_players
+                else:
+                    sg.popup_error("Please enter a number between 2 and 4.")
+            except ValueError:
+                sg.popup_error("Invalid input. Please enter a valid number.")
+
+
+# Main function to run the game
 def play_uno():
     sg.theme("DarkBlue")
-    num_players = int(sg.popup_get_text("Enter number of players (2-4):", title="UNO Game"))
+
+    # Step 1: Ask for the number of players
+    num_players = get_number_of_players()
+    if num_players is None:
+        return
+
+    # Step 2: Initialize deck and players
     deck = Deck()
 
     # Initialize players
-    players = [Player(f"Player {i+1}") for i in range(num_players)]
+    players = [Player(f"Player {i + 1}") for i in range(num_players)]
     for player in players:
-        for _ in range(7):  # Deal 7 cards to each player
+        for _ in range(7):
             player.draw_card(deck)
-        player.sort_hand()
 
-    discard_pile = [deck.draw()]
+    discard_pile = [deck.draw()]  # Start with one card in the discard pile
+    top_card = discard_pile[-1]
 
-    layout = [
-        [sg.Text("UNO Game", font=("Helvetica", 20))],
-        [sg.Graph((800, 450), (0, 0), (800, 450), background_color='white', key='graph')],
-        [sg.Text("Top Card:", font=("Helvetica", 12)), 
-         sg.Graph((100, 150), (0, 0), (100, 150), background_color='white', key='deck_graph')],
-        [sg.Button("Draw Card"), sg.Button("End Turn"), sg.Button("Exit")]
-    ]
+    # Create window layout
+    window = sg.Window("UNO Game", create_layout(), finalize=True)
 
-    window = sg.Window("UNO Game", layout, finalize=True)
-    graph = window['graph']
-    deck_graph = window['deck_graph']
+    # Initially display the player's hand and top card
+    update_top_card_display(window, top_card)
+    display_hand(window, players[0])
 
     turn = 0
-    direction = 1
-
+    current_card_index = 0  # To manage the horizontal scrolling of hand
     while True:
         player = players[turn]
         top_card = discard_pile[-1]
+        update_top_card_display(window, top_card)
 
-        sg.popup(f"{player.name}'s turn! Top card: {top_card['color']} {top_card['value']}", title="Turn Info")
-        card_positions = display_hand(window, player, graph)  # Display the player's hand
-        draw_top_card(deck_graph, top_card)  # Draw the top card on the deck
+        window["player_turn"].update(f"Player {turn + 1}'s Turn")
+        window["deck_count"].update(f"Remaining Deck Cards: {len(deck.cards)}")  # Update deck count display
 
         turn_ended = False
         while not turn_ended:
             event, values = window.read()
-            if event == sg.WIN_CLOSED or event == "Exit":
+            if event in (sg.WIN_CLOSED, "Exit"):
                 window.close()
                 return
 
-            if event == "Draw Card":
-                drawn_card = player.draw_card(deck)
-                sg.popup(f"You drew: {drawn_card['color']} {drawn_card['value']}", title="Card Drawn")
-                continue
+            # Scroll left button
+            if event == "scroll_left" and current_card_index > 0:
+                current_card_index -= 1
+                display_hand(window, player, update_only=True)
 
-            if event == "End Turn":
-                sg.popup(f"{player.name} ends their turn.", title="End Turn")
-                turn_ended = True
-                continue
+            # Scroll right button
+            elif event == "scroll_right" and current_card_index < len(player.hand) - 1:
+                current_card_index += 1
+                display_hand(window, player, update_only=True)
 
-            # Handle card button click
-            if event.startswith('card_'):
-                card_idx = int(event.split('_')[1])
-                card = player.hand[card_idx]
-                if card["color"] == "Wild" or top_card["color"] == "Wild" or card["color"] == top_card["color"] or card["value"] == top_card["value"]:
-                    player.play_card(card)
-                    discard_pile.append(card)
-                    sg.popup(f"{player.name} played: {card['color']} {card['value']}")
+            # Card button click event
+            elif event.startswith("card_"):
+                card_idx = int(event.split("_")[1])
+                selected_card = player.hand[card_idx]
+
+                # Check if the card is playable
+                if selected_card.is_playable_on(top_card):
+                    # Remove card from player's hand and add it to the discard pile
+                    played_card = player.play_card(selected_card)
+                    discard_pile.append(played_card)
+                    sg.popup(f"{player.name} played: {played_card.color} {played_card.value}")
+
+                    # Update the top card and player's hand display
+                    update_top_card_display(window, played_card)
+                    display_hand(window, player)
+                    window["deck_count"].update(f"Remaining Deck Cards: {len(deck.cards)}")
+
+                    # Switch to the next player
+                    turn = (turn + 1) % num_players
                     turn_ended = True
+
                 else:
-                    sg.popup("Invalid move. Please choose a valid card.")
-                    continue
+                    sg.popup("Card not playable! Choose a valid card or draw a new one.")
+
+            # Draw Card button clicked
+            elif event == "Draw":
+                drawn_card = player.draw_card(deck)
+                sg.popup(f"You drew: {drawn_card.color} {drawn_card.value}")
+
+                # Add the new card to the display
+                display_hand(window, player, update_only=True)
+                window["deck_count"].update(f"Remaining Deck Cards: {len(deck.cards)}")
+
+            # End Turn button clicked
+            elif event == "End Turn":
+                turn_ended = True
 
         if not player.hand:
-            sg.popup(f"{player.name} wins the game! 🎉", title="Game Over")
+            sg.popup(f"{player.name} wins the game! 🎉")
             break
-
-        turn = (turn + direction) % len(players)
 
     window.close()
 

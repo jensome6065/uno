@@ -8,19 +8,14 @@ class Deck:
     def build_deck(self):
         colors = ["Red", "Yellow", "Green", "Blue"]
         values = [str(i) for i in range(10)] + ["Skip", "Reverse", "+2"]
-        deck = [{"color": color, "value": value} for color in colors for value in values]
+        deck = [Card(color, value) for color in colors for value in values]
         deck += deck  # Two of each non-zero card
-        deck += [{"color": "Wild", "value": "Wild"}, {"color": "Wild", "value": "Wild +4"}] * 4  # Wild cards
+        deck += [Card("Wild", "Wild"), Card("Wild", "Wild +4")] * 4  # Wild cards
         return deck
 
     def draw(self):
         return self.cards.pop() if self.cards else None
 
-    def shuffle(self):
-        random.shuffle(self.cards)
-
-    def remaining(self):
-        return len(self.cards)
 
 class Card:
     def __init__(self, color, value):
@@ -29,3 +24,11 @@ class Card:
 
     def __repr__(self):
         return f"{self.color} {self.value}"
+
+    def is_playable_on(self, top_card):
+        return (
+            self.color == "Wild" or
+            top_card.color == "Wild" or
+            self.color == top_card.color or
+            self.value == top_card.value
+        )
