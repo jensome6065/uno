@@ -12,7 +12,7 @@ class UNOGame:
         self.playing_stack = [self.deck.draw_card()]
 
         first_card = self.deck.draw_card()
-        while first_card.value in ['Skip', 'Reverse', '+2', '+4', 'Color', 'Swap', 'Trash', 'Number']:
+        while first_card.color == 'Wild' or first_card.value == 'Skip' or first_card.value == 'Reverse' or first_card.value == '+2':
             first_card = self.deck.draw_card()
         self.playing_stack.append(first_card)
         
@@ -40,7 +40,7 @@ class UNOGame:
         self.top_card_canvas.create_oval(25, 40, 75, 100, fill='white', outline='black', width=2)
 
         if top_card.color == 'Wild' and top_card.value == 'Number':
-            self.top_card_canvas.create_text(50, 70, text="Wild\nNumber", font=('Arial', 12, 'bold'), fill='black')
+            self.top_card_canvas.create_text(50, 70, text="Number", font=('Arial', 16, 'bold'), fill='black')
         else:
             self.top_card_canvas.create_text(50, 70, text=top_card.value, font=('Arial', 16, 'bold'), fill='black')
 
@@ -113,7 +113,7 @@ class UNOGame:
         card_canvas.create_oval(25, 40, 75, 100, fill='white', outline='black', width=2)  
 
         if card.color == 'Wild' and card.value == 'Number':
-            card_canvas.create_text(50, 70, text="Wild\nNumber", font=('Arial', 12, 'bold'), fill='black')
+            card_canvas.create_text(50, 70, text="Number", font=('Arial', 16, 'bold'), fill='black')
         else:
             card_canvas.create_text(50, 70, text=card.value, font=('Arial', 16, 'bold'), fill='black')
 
@@ -125,31 +125,29 @@ class UNOGame:
         card = player.hand[card_index]
 
         if card.color == 'Wild':
-            if card.value == 'Swap':
+            if card.value == 'Trash':
+                self.handle_wild_trash(card)
+            elif card.value == 'Swap':
                 self.handle_swap(player)
-            elif card.value == 'Wild Number':
+            elif card.value == 'Number':
                 self.ask_for_wild_number(card)
-            elif card.value == 'Wild +4':
-                next_player_index = (self.current_player + self.direction) % len(self.players)
-                self.players[next_player_index].draw(self.deck, 4)
-                self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
-                self.update_game_display()
-            elif card.value == 'Wild Trash':
-                self.handle_wild_trash(card)  
+                self.handle_special_cards(card)
+            elif card.value == '+4':
+                self.ask_for_wild_color(card)  
+                self.handle_special_cards(card) 
             else:
-                self.ask_for_wild_color(card)
+                self.ask_for_wild_color(card)  
         elif self.is_valid_play(card):
             player.play_card(card)
             self.playing_stack.append(card)
 
             if len(player.hand) == 0:
                 self.check_for_winner()
-                return 
+                return
 
             self.handle_special_cards(card)
             self.move_to_next_player()
             self.update_game_display()
-
         else:
             messagebox.showwarning("Invalid Play", "That card is not valid!")
 
@@ -160,18 +158,16 @@ class UNOGame:
     def on_draw_card(self):
         """Handle the event when a player draws a card."""
         player = self.players[self.current_player]
-        player.draw(self.deck)
+        try:
+            drawn_card = self.deck.draw_card(self.playing_stack)
+            player.hand.append(drawn_card)
 
-        if len(player.hand) == 0:
-            self.check_for_winner()
-            return  
-
-        drawn_card = player.hand[-1] 
-        if self.is_valid_play(drawn_card):
-            self.on_card_play(len(player.hand) - 1) 
-            return  
-
-        self.move_to_next_player()
+            if self.is_valid_play(drawn_card):
+                self.on_card_play(len(player.hand) - 1) 
+            else:
+                self.move_to_next_player()
+        except IndexError:
+            messagebox.showwarning("Deck Empty", "No cards left to draw, and discard pile cannot be reshuffled.")
         self.update_game_display()
 
     def handle_swap(self, player):
@@ -190,108 +186,163 @@ class UNOGame:
         self.move_to_next_player()
         self.update_game_display()
 
-    def handle_wild_trash(self):
+    def handle_wild_trash(self, card):
         """Handle the Wild Trash card effect."""
         player = self.players[self.current_player]
 
+        available_colors = {c.color for c in player.hand if c.color != 'Wild'}
+        
+        if not available_colors:
+            messagebox.showwarning("No Available Colors", "You have no colored cards to trash.")
+            return
+
         color_dialog = tk.Toplevel(self.root)
-        color_dialog.title("Choose a color to discard")
+        color_dialog.title("Choose a Color to Trash")
+        color_dialog.geometry("300x200")
+        color_dialog.configure(bg="lightblue")
 
-        color_choices = ['Red', 'Yellow', 'Green', 'Blue']
-
-        def discard_color_cards(selected_color):
-            cards_to_remove = [card for card in player.hand if card.color == selected_color]
-            for card in cards_to_remove:
-                player.hand.remove(card)
-                self.playing_stack.append(card) 
+        def choose_trash_color(selected_trash_color):
+            """Choose which color to trash and then select a new top color."""
+            cards_to_trash = [c for c in player.hand if c.color == selected_trash_color]
+            for c in cards_to_trash:
+                player.hand.remove(c)
+                self.playing_stack.append(c)
 
             color_dialog.destroy()
-            self.move_to_next_player() 
-            self.update_game_display()  
 
-        for color in color_choices:
-            btn = tk.Button(color_dialog, text=color, width=10, height=2,
-                            command=lambda color=color: discard_color_cards(color))
-            btn.pack(pady=10)
+            self.ask_for_wild_color(card)
+
+        for color in available_colors:
+            tk.Button(
+                color_dialog,
+                text=color,
+                width=15,
+                height=2,
+                command=lambda color=color: choose_trash_color(color),
+                bg=color.lower()
+            ).pack(pady=10)
+
+        color_dialog.grab_set()  
 
     def handle_special_cards(self, card):
         """Handle special cards (Skip, +2, Reverse, and Wild cards)."""
         if card.value == 'Skip':
             self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
         elif card.value == '+2':
-            next_player_index = (self.current_player + self.direction) % len(self.players)
-            self.players[next_player_index].draw(self.deck, 2)
-            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+            self.handle_draw_two(card)
         elif card.value == 'Reverse':
             self.direction *= -1
         elif card.value == 'Swap':
             self.handle_swap(self.players[self.current_player])
         elif card.value == 'Trash':
             self.handle_wild_trash(card)
-
+        elif card.value == '+4':
+            next_player_index = (self.current_player + self.direction) % len(self.players)
+            self.players[next_player_index].draw(self.deck, 4)  # Next player draws 4 cards
+            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
         self.check_for_winner()
+
+    def handle_draw_two(self, card):
+        """Handle the +2 card stacking mechanism."""
+        total_draws = 2
+        current_player_index = (self.current_player + self.direction) % len(self.players)
+        
+        while True:
+            next_player = self.players[current_player_index]
+            
+            if any(c.value == '+2' for c in next_player.hand):
+                self.current_player = current_player_index
+                next_player_turn = False
+                
+                for idx, c in enumerate(next_player.hand):
+                    if c.value == '+2':
+                        self.on_card_play(idx)
+                        total_draws += 2
+                        current_player_index = (current_player_index + self.direction) % len(self.players)
+                        break
+            else:
+                next_player.draw(self.deck, total_draws)
+                self.current_player = current_player_index
+                self.move_to_next_player()
+                break
 
     def ask_for_wild_color(self, card):
         """Ask the player to choose a color after playing a Wild card."""
         color_dialog = tk.Toplevel(self.root)
         color_dialog.title("Choose a color")
+        color_dialog.geometry("300x200")
+        color_dialog.configure(bg="lightblue")
 
-        color_choices = ['Red', 'Yellow', 'Green', 'Blue']
-        
+        available_colors = {c.color for c in self.players[self.current_player].hand if c.color != 'Wild'}
+        if not available_colors:
+            available_colors = ['Red', 'Yellow', 'Green', 'Blue'] 
+
         def set_color(selected_color):
-            self.playing_stack[-1].color = selected_color
+            card.color = selected_color 
+            self.playing_stack.append(card) 
+
             player = self.players[self.current_player]
-            player.play_card(card)  
-            color_dialog.destroy()  
+            if card in player.hand:
+                player.play_card(card)  
+            
+            color_dialog.destroy()
 
             if card.value == '+4':
                 next_player_index = (self.current_player + self.direction) % len(self.players)
-                self.players[next_player_index].draw(self.deck, 4)
+                self.players[next_player_index].draw(self.deck, 4) 
                 self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+            else:
+                self.move_to_next_player()
 
-            self.update_game_display()  
+            self.update_game_display()
 
-        for color in color_choices:
-            btn = tk.Button(color_dialog, text=color, width=10, height=2,
-                            command=lambda color=color: set_color(color))
-            btn.pack(pady=10)
+        for color in available_colors:
+            tk.Button(
+                color_dialog,
+                text=color,
+                width=15,
+                height=2,
+                command=lambda color=color: set_color(color),
+                bg=color.lower()
+            ).pack(pady=10)
+
+        color_dialog.grab_set()
 
     def ask_for_wild_number(self, card):
-        """Ask the player to choose a color and a number for the Wild Number card."""
-        color_dialog = tk.Toplevel(self.root)
-        color_dialog.title("Choose a Color")
-        
-        color_choices = ['Red', 'Yellow', 'Green', 'Blue']
-        
-        def on_color_select(selected_color):
-            color_dialog.destroy()
-            number_dialog = tk.Toplevel(self.root)
-            number_dialog.title("Choose a Number")
-            
-            chosen_number = simpledialog.askinteger(
-                "Wild Number", 
-                "Choose a number (0-9):", 
-                parent=number_dialog, 
-                minvalue=0, 
-                maxvalue=9
-            )
-            
-            if chosen_number is not None:
-                wild_number_card = Card(selected_color, str(chosen_number))
-                
-                player = self.players[self.current_player]
-                player.play_card(card)
-                self.playing_stack.append(wild_number_card)
-                self.update_game_display()
-                self.current_player = (self.current_player + self.direction) % len(self.players)
-                self.update_game_display()
-            else:
-                messagebox.showwarning("Invalid Choice", "You must choose a number!")
+        """Ask the player to type a number for the Wild Number card."""
+        number_dialog = tk.Toplevel(self.root)
+        number_dialog.title("Choose a Number")
+        number_dialog.geometry("300x200")
+        number_dialog.configure(bg="lightblue")
 
-        for color in color_choices:
-            btn = tk.Button(color_dialog, text=color, width=10, height=2,
-                            command=lambda c=color: on_color_select(c))
-            btn.pack(pady=10)
+        instruction_label = tk.Label(
+            number_dialog, text="Type a number between 0 and 9:", font=('Arial', 14), bg="lightblue")
+        instruction_label.pack(pady=10)
+
+        number_entry = tk.Entry(number_dialog, font=('Arial', 14))
+        number_entry.pack(pady=10)
+
+        def set_number():
+            """Set the number for the Wild card."""
+            try:
+                selected_number = int(number_entry.get())
+                if 0 <= selected_number <= 9:
+                    card.value = str(selected_number)  
+                    self.playing_stack.append(card)  
+                    player = self.players[self.current_player]
+                    player.play_card(card)  
+                    number_dialog.destroy()
+                    self.move_to_next_player()
+                    self.update_game_display()
+                else:
+                    messagebox.showwarning("Invalid Input", "Please enter a number between 0 and 9.")
+            except ValueError:
+                messagebox.showwarning("Invalid Input", "Please enter a valid number.")
+
+        confirm_button = tk.Button(number_dialog, text="Confirm", command=set_number, font=('Arial', 14), bg="lightgreen")
+        confirm_button.pack(pady=10)
+
+        number_dialog.grab_set()
 
     def ask_for_wild_trash_color(self, card):
         """Ask the player to choose a color to discard all matching color cards."""
@@ -362,21 +413,28 @@ class UNOGame:
             
 def main():
     root = tk.Tk()
-    root.title("UNO Game")
-    root.configure(bg='lightblue')
+    root.withdraw
     
     num_players = simpledialog.askinteger("Number of Players", "Enter the number of players (2-4):", minvalue=2, maxvalue=4)
     if num_players is None:
-        return  
+        return 
 
     player_names = []
     for i in range(num_players):
-        player_name = simpledialog.askstring("Player Name", f"Enter name for Player {i+1}:")
-        player_names.append(player_name)
-    
+        while True:
+            player_name = simpledialog.askstring("Player Name", f"Enter name for Player {i+1}:")
+            if player_name and player_name.strip():
+                player_names.append(player_name.strip())
+                break
+            else:
+                messagebox.showwarning("Invalid Input", "Player name cannot be empty!")
+
+    root.deiconify()
+    root.title("UNO Game")
+    root.configure(bg='lightblue')
+
     game = UNOGame(player_names, root)
     game.start_game()
-
     root.mainloop()
 
 if __name__ == "__main__":
