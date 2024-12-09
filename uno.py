@@ -4,6 +4,7 @@ from player import Player
 from cards import Deck, Card
 
 class UNOGame:
+    
     def __init__(self, players, root):
         self.deck = Deck()
         self.players = [Player(name) for name in players]
@@ -402,8 +403,8 @@ class UNOGame:
                 self.ask_for_wild_number(card)
                 self.handle_special_cards(card)
             elif card.value == '+4':
-                self.ask_for_wild_color(card)  
-                self.handle_special_cards(card) 
+                # Modified +4 logic to first ask for color
+                self.ask_for_wild_color(card, is_plus_four=True)
             else:
                 self.ask_for_wild_color(card)  
         elif self.is_valid_play(card):
@@ -419,6 +420,107 @@ class UNOGame:
             self.root.after(500, self.move_to_next_player)
         else:
             messagebox.showwarning("Invalid Play", "That card is not valid!")
+
+    def ask_for_wild_color(self, card, is_plus_four=False):
+        """Ask the player to choose a color after playing a Wild card."""
+        color_dialog = tk.Toplevel(self.root)
+        color_dialog.title("Choose a color")
+        color_dialog.geometry("300x200")
+        color_dialog.configure(bg="lightblue")
+
+        available_colors = {c.color for c in self.players[self.current_player].hand if c.color != 'Wild'}
+        if not available_colors:
+            available_colors = ['Red', 'Yellow', 'Green', 'Blue'] 
+
+        def set_color(selected_color):
+            card.color = selected_color 
+            self.playing_stack.append(card) 
+
+            player = self.players[self.current_player]
+            if card in player.hand:
+                player.play_card(card)  
+            
+            color_dialog.destroy()
+
+            if is_plus_four:
+                # If it's a +4 card, ask the next player if they want to challenge
+                self.challenge_plus_four(card, selected_color)
+            else:
+                self.move_to_next_player()
+                self.update_game_display()
+
+        for color in available_colors:
+            tk.Button(
+                color_dialog,
+                text=color,
+                width=15,
+                height=2,
+                command=lambda color=color: set_color(color),
+                bg=color.lower()
+            ).pack(pady=10)
+
+        color_dialog.grab_set()
+
+    def challenge_plus_four(self, card, chosen_color):
+        """Ask the next player if they want to challenge the +4 card."""
+        next_player_index = (self.current_player + self.direction) % len(self.players)
+        next_player = self.players[next_player_index]
+
+        challenge_dialog = tk.Toplevel(self.root)
+        challenge_dialog.title("Challenge +4?")
+        challenge_dialog.geometry("300x200")
+        challenge_dialog.configure(bg="lightblue")
+
+        tk.Label(challenge_dialog, 
+                 text=f"{next_player.name}, do you want to challenge the +4?", 
+                 font=('Arial', 14), 
+                 bg="lightblue", 
+                 wraplength=250).pack(pady=20)
+
+        def accept_plus_four():
+            """Accept the +4 card and draw 4 cards."""
+            next_player.draw(self.deck, 4)
+            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+            challenge_dialog.destroy()
+            self.move_to_next_player()
+            self.update_game_display()
+
+        def challenge_plus_four_play():
+            """Challenge the +4 card play."""
+            current_player_hand = self.players[self.current_player].hand
+            can_play_color = any(
+                card.color == chosen_color or 
+                card.value == self.playing_stack[-2].value 
+                for card in current_player_hand
+            )
+
+            challenge_dialog.destroy()
+
+            if can_play_color:
+                # Current player played +4 illegally and must draw 6 cards
+                messagebox.showinfo("Challenge Successful", 
+                                    f"{self.players[self.current_player].name} must draw 6 cards!")
+                self.players[self.current_player].draw(self.deck, 6)
+                self.current_player = next_player_index
+            else:
+                # Challenge failed, next player draws 4
+                next_player.draw(self.deck, 4)
+                self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+
+            self.move_to_next_player()
+            self.update_game_display()
+
+        tk.Button(challenge_dialog, text="Accept +4", 
+                  command=accept_plus_four, 
+                  bg="green", 
+                  font=('Arial', 12)).pack(pady=10)
+
+        tk.Button(challenge_dialog, text="Challenge", 
+                  command=challenge_plus_four_play, 
+                  bg="red", 
+                  font=('Arial', 12)).pack(pady=10)
+
+        challenge_dialog.grab_set()
 
     def next_player_draw(self, num_cards):
         """Let the next player draw the specified number of cards."""
