@@ -144,6 +144,7 @@ class UNOGame:
     def move_to_next_player(self):
         """Move to the next player after the current player plays a card."""
         self.current_player = (self.current_player + self.direction) % len(self.players)
+        self.root.after(500, self.update_game_display) 
 
     def on_draw_card(self):
         """Handle the event when a player draws a card."""
@@ -400,8 +401,8 @@ class UNOGame:
                 return
 
             self.handle_special_cards(card)
-            self.move_to_next_player()
-            self.update_game_display()
+
+            self.root.after(500, self.move_to_next_player)
         else:
             messagebox.showwarning("Invalid Play", "That card is not valid!")
 
