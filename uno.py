@@ -164,6 +164,9 @@ class UNOGame:
     def is_valid_play(self, player_card):
         """Check if the card played by the player is valid."""
         top_card = self.playing_stack[-1]
+
+        if top_card.value == 'Swap':
+            return True
         
         if player_card.color == 'Wild' and player_card.value == '+4':
             current_player_hand = self.players[self.current_player].hand
@@ -180,7 +183,7 @@ class UNOGame:
     def handle_special_cards(self, card):
         """Handle special cards (Skip, +2, Reverse, and Wild cards)."""
         if card.value == 'Skip':
-            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+            self.current_player = (self.current_player + self.direction) % len(self.players)
         elif card.value == '+2':
             self.handle_draw_two(card)
         elif card.value == 'Reverse':
@@ -192,7 +195,12 @@ class UNOGame:
         elif card.value == '+4':
             next_player_index = (self.current_player + self.direction) % len(self.players)
             self.players[next_player_index].draw(self.deck, 4)  # Next player draws 4 cards
-            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+            
+            # Skip the player who drew the +4
+            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)  # Skip over the current player
+            
+            # Move to the next player
+            self.move_to_next_player()
         self.check_for_winner()
 
     def handle_draw_two(self, card):
@@ -218,22 +226,28 @@ class UNOGame:
                 self.current_player = current_player_index
                 self.move_to_next_player()
                 break
-   
+
     def handle_swap(self, player):
-        """Handle the Swap wildcard effect."""
+        """Handle the Swap card effect."""
         fewest_cards_player = min(self.players, key=lambda p: len(p.hand))
-        player.hand, fewest_cards_player.hand = fewest_cards_player.hand, player.hand
+
         swap_card = None
         for card in player.hand:
             if card.color == 'Wild' and card.value == 'Swap':
                 swap_card = card
                 break
-        if swap_card:
-            player.hand.remove(swap_card)
-            self.playing_stack.append(swap_card)
 
-        self.move_to_next_player()
+        if not swap_card:
+            messagebox.showerror("Error", "Swap card not found in player's hand!")
+            return
+
+        player.hand.remove(swap_card)  
+        self.playing_stack.append(swap_card)  
+
+        player.hand, fewest_cards_player.hand = fewest_cards_player.hand, player.hand
+
         self.update_game_display()
+        self.move_to_next_player()
 
     def handle_wild_trash(self, card):
         """Handle the Wild Trash card effect."""
