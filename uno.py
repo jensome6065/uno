@@ -30,7 +30,7 @@ class UNOGame:
             colors = ['red', 'blue', 'green', 'yellow']
             for i, color in enumerate(colors):
                 self.top_card_canvas.create_rectangle(
-                    5, 5 + i*35, 95, 5 + (i+1)*35,
+                    5, 5 + i * 35, 95, 5 + (i + 1) * 35,
                     fill=color, outline='black', width=1
                 )
 
@@ -86,8 +86,17 @@ class UNOGame:
             self.hand_buttons.append(card_button)
 
         # Show whose turn it is (move to left-middle of the top card)
-        self.turn_label = tk.Label(self.root, text=f"{player.name}'s turn", font=('Arial', 16), bg='lightblue', pady=10)
+        self.turn_label = tk.Label(self.root, text=f"{player.name}'s turn", font=('Arial', 30), bg='lightblue', pady=10)
         self.turn_label.grid(row=0, column=1, padx=10, pady=(30, 40), sticky='w')  # Increased padding for turn label
+
+        # Show each player's name and number of cards in their hand next to the Draw Card button
+        self.player_info_labels = {}
+        column_offset = 1  # Adjust this number if you want more space between the button and the labels
+        for idx, p in enumerate(self.players):
+            label_text = f"{p.name}: {len(p.hand)} cards"
+            label = tk.Label(self.root, text=label_text, font=('Arial', 20), bg='lightblue')
+            label.grid(row=0, column=5 + idx, padx=10, pady=5)  # Adjust the column for each player
+            self.player_info_labels[p.name] = label
 
     def card_value_sort_key(self, card):
         """Helper method to provide sorting key for card values."""
