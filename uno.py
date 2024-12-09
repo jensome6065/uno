@@ -65,6 +65,9 @@ class UNOGame:
         self.hand_buttons = []
         self.hand_canvases = []
 
+        # Sort the player's hand by color, then by value
+        player.hand.sort(key=lambda card: (card.color, self.card_value_sort_key(card)))
+
         # Maintain consistent spacing between cards in player's hand
         hand_start_column = 0  # Starting column for hand buttons (adjust if needed)
         for idx, card in enumerate(player.hand):
@@ -85,6 +88,12 @@ class UNOGame:
         # Show whose turn it is (move to left-middle of the top card)
         self.turn_label = tk.Label(self.root, text=f"{player.name}'s turn", font=('Arial', 16), bg='lightblue', pady=10)
         self.turn_label.grid(row=0, column=1, padx=10, pady=(30, 40), sticky='w')  # Increased padding for turn label
+
+    def card_value_sort_key(self, card):
+        """Helper method to provide sorting key for card values."""
+        special_values = {'Skip': 10, 'Reverse': 11, '+2': 12, 'Wild': 13, 'Wild +4': 14}
+        # Return the number value for regular cards, or a higher value for special cards
+        return int(card.value) if card.value.isdigit() else special_values.get(card.value, 15)
 
     def clear_widgets(self):
         """Clear all existing widgets."""
