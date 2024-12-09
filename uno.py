@@ -137,81 +137,86 @@ class UNOGame:
             card_canvas.create_text(50, 70, text=card.value, font=('Arial', 16, 'bold'), fill='black')
 
         return card_canvas
-
+    
     def on_card_play(self, card_index):
         """Handle the event when a card is played."""
         player = self.players[self.current_player]
         card = player.hand[card_index]
 
         if card.color == 'Wild':
-            if card.value == 'Wild Number':
+            if card.value == 'Swap': 
+                self.handle_swap(player)
+            elif card.value == 'Wild Number':
                 self.ask_for_wild_number(card)
             elif card.value == 'Wild +4':
                 # Ask for color first
-                color_dialog = tk.Toplevel(self.root)
-                color_dialog.title("Choose a Color")
-                
-                color_choices = ['Red', 'Yellow', 'Green', 'Blue']
-                
-                def set_color(selected_color):
-                    # Determine the next player
-                    next_player_index = (self.current_player + self.direction) % len(self.players)
-                    next_player = self.players[next_player_index]
-                    
-                    # Make the next player draw 4 cards
-                    next_player.draw(self.deck, 4)
-                    
-                    # Play the Wild Draw Four card
-                    player.play_card(card)
-                    
-                    # Change the color of the top card
-                    wild_card = Card(selected_color, 'Wild +4')
-                    self.playing_stack.append(wild_card)
-                    
-                    # Move to the player after the one who drew
-                    self.current_player = (next_player_index + self.direction) % len(self.players)
-                    
-                    color_dialog.destroy()
-                    self.update_game_display()
-
-                # Create color selection buttons
-                for color in color_choices:
-                    btn = tk.Button(color_dialog, text=color, width=10, height=2,
-                                    command=lambda c=color: set_color(c))
-                    btn.pack(pady=10)
+                self.ask_for_wild_color(card)
             else:
                 self.ask_for_wild_color(card)
         elif self.is_valid_play(card):
             player.play_card(card)
             self.playing_stack.append(card)
 
-            # Handle special cards
-            if card.value == 'Skip':
-                # Skip the next player by moving the current player index
-                self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
-            elif card.value == '+2':
-                # Move to next player and make them draw
-                self.current_player = (self.current_player + self.direction) % len(self.players)
-                self.next_player_draw(2)
-                # Move to the player after the one who drew
-                self.current_player = (self.current_player + self.direction) % len(self.players)
-            elif card.value == 'Reverse':
-                # Reverse the direction of play
-                self.direction *= -1
-            
-            if player.has_won():
-                messagebox.showinfo("UNO", f"{player.name} has won the game!")
-                self.root.quit()
-                return
+            # Handle special cards (e.g., Skip, +2, Reverse)
+            self.handle_special_cards(card)
 
-            # If it's not a special card that already moved the player, 
-            # move to the next player
-            if card.value not in ['Skip', '+2', 'Reverse', 'Wild +4']:
-                self.current_player = (self.current_player + self.direction) % len(self.players)
+            # Move to the next player after the current player plays a card
+            self.move_to_next_player()
 
+            # Update the game display
             self.update_game_display()
+
         else:
             messagebox.showwarning("Invalid Play", "That card is not valid!")
+
+    def move_to_next_player(self):
+        """Move to the next player after the current player plays a card."""
+        self.current_player = (self.current_player + self.direction) % len(self.players)
+
+    def on_draw_card(self):
+        """Handle the event when a player draws a card."""
+        player = self.players[self.current_player]
+        player.draw(self.deck)
+        self.update_game_display()
+
+        # Check if the drawn card is playable
+        drawn_card = player.hand[-1]  # The last card drawn is the most recent one
+        if self.is_valid_play(drawn_card):
+            # Automatically play the drawn card if it is valid
+            self.on_card_play(len(player.hand) - 1)
+        else:
+            # Move to the next player if the drawn card is not playable
+            self.move_to_next_player()
+
+        # Update game display and move to the next player
+        self.update_game_display()
+
+    def handle_swap(self, player):
+        """Handle the Swap wildcard effect."""
+        # Find the player with the fewest cards
+        fewest_cards_player = min(self.players, key=lambda p: len(p.hand))
+        
+        # Swap hands
+        player.hand, fewest_cards_player.hand = fewest_cards_player.hand, player.hand
+        
+        # Update the game display and move to the next player
+        self.current_player = (self.current_player + self.direction) % len(self.players)
+        self.update_game_display()
+
+    def handle_special_cards(self, card):
+        """Handle special cards (Skip, +2, Reverse)."""
+        if card.value == 'Skip':
+            # Skip the next player by moving the current player index
+            self.current_player = (self.current_player + 2 * self.direction) % len(self.players)
+        elif card.value == '+2':
+            # Move to next player and make them draw
+            self.current_player = (self.current_player + self.direction) % len(self.players)
+            self.next_player_draw(2)
+            # Move to the player after the one who drew
+            self.current_player = (self.current_player + self.direction) % len(self.players)
+        elif card.value == 'Reverse':
+            # Reverse the direction of play
+            self.direction *= -1
 
     def ask_for_wild_number(self, card):
         """Ask the player to choose a color and a number for the Wild Number card."""
